@@ -2441,6 +2441,8 @@ function hasAncestorIndex(element, expectedIndex, byIndex) {
  * An empty composer serializes with neither label nor value. This condition is
  * deliberately narrower than accepting an arbitrary Edit or an absent value.
  */
+const DETACHED_COMPOSER_PLACEHOLDER = '輸入訊息';
+
 function findDetachedComposerFallback(state) {
   const edits = state.elements.filter(element => normalized(element.role) === 'edit');
   if (state.elements.some(element => normalized(element.role) === 'dialog')) {
@@ -2461,8 +2463,15 @@ function findDetachedComposerFallback(state) {
   if (value !== undefined) {
     return { element, value, verification: 'detached-composer-value-readback' };
   }
-  if (exactLabels(element).length === 0) {
+  const labels = exactLabels(element);
+  if (labels.length === 0) {
     return { element, value: '', verification: 'detached-composer-empty-structure' };
+  }
+  // LOCAL (branch local/line-26.6.0.4004): LINE 26.6.0.4004 labels the composer
+  // with its placeholder and omits value until text exists; a draft still
+  // exposes value and takes the readback path above.
+  if (labels.every(label => label === DETACHED_COMPOSER_PLACEHOLDER)) {
+    return { element, value: '', verification: 'detached-composer-placeholder-label' };
   }
   // A nonempty label without a value has not been proven to be complete draft
   // text. Leave it alone instead of treating it as empty or overwriting it.

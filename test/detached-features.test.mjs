@@ -300,6 +300,54 @@ test('detached draft writing selects the rich composer, not the Search Edit', as
   assert.equal(writes[0].args.element_token, 'token-90');
 });
 
+// LOCAL (branch local/line-26.6.0.4004): LINE 26.6.0.4004 labels the detached
+// composer with its placeholder and omits the value field until text exists.
+const PLACEHOLDER = '輸入訊息';
+
+function withComposer(changes) {
+  return [...detachedElements(), ...detachedSearchBar()].map(item =>
+    item.element_index === 90 ? { ...item, ...changes } : item);
+}
+
+test('LOCAL: detached draft treats the 26.6 placeholder label without a value as empty', async () => {
+  const opened = withComposer({ label: PLACEHOLDER });
+  const { ui, calls } = environment([snapshot(opened, 'inspect'), snapshot(opened, 'draft-read')]);
+  const result = await ui.getDraft({ chatName: CHAT, chatType: 'group' });
+  assert.equal(result.draft, '');
+  assert.equal(result.verification.draft, 'detached-composer-placeholder-label');
+  assert.equal(calls.some(call => ['click', 'set_value'].includes(call.name)), false);
+});
+
+test('LOCAL: detached draft writing starts from the 26.6 placeholder state', async () => {
+  const empty = withComposer({ label: PLACEHOLDER });
+  const written = withComposer({ label: PLACEHOLDER, value: 'draft only' });
+  const { ui, calls } = environment([
+    snapshot(empty, 'inspect'), snapshot(empty, 'write-before'),
+    snapshot(written, 'write-after'),
+  ]);
+  const result = await ui.setDraft({ chatName: CHAT, message: 'draft only' });
+  assert.equal(result.changed, true);
+  const writes = calls.filter(call => call.name === 'set_value');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].args.element_token, 'token-90');
+});
+
+test('LOCAL: detached draft still reads a real 26.6 draft behind the placeholder label', async () => {
+  const opened = withComposer({ label: PLACEHOLDER, value: '測試' });
+  const { ui } = environment([snapshot(opened, 'inspect'), snapshot(opened, 'draft-read')]);
+  const result = await ui.getDraft({ chatName: CHAT, chatType: 'group' });
+  assert.equal(result.draft, '測試');
+  assert.equal(result.verification.draft, 'detached-composer-value-readback');
+});
+
+test('LOCAL: detached draft still refuses any other label without a value', async () => {
+  const opened = withComposer({ label: '輸入訊息 草稿' });
+  const { ui, calls } = environment([snapshot(opened, 'inspect'), snapshot(opened, 'draft-read')]);
+  await assert.rejects(ui.getDraft({ chatName: CHAT, chatType: 'group' }),
+    { code: 'LINE_COMPOSER_UNVERIFIED' });
+  assert.equal(calls.some(call => ['click', 'set_value'].includes(call.name)), false);
+});
+
 test('detached draft refuses two rich editors even with Search open', async () => {
   const opened = [
     ...detachedElements(), ...detachedSearchBar(),
